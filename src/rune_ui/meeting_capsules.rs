@@ -26,7 +26,7 @@
 //! float on XWayland only with Labs › Floating meeting capsules on GNOME
 //! (`linux::meeting_capsules`); otherwise an offer opens the Meetings pane.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -384,14 +384,19 @@ fn pointer_screen_size() -> Option<(f32, f32)> {
     None
 }
 
-/// The display a capsule shows on, read at each show: the primary one, or
-/// with Labs › Meeting capsules follow the pointer the one under the
-/// pointer, so an offer for a call on an external display shows there.
-fn capsule_display() -> rune::DisplayTarget {
-    if crate::labs::meeting_capsules_follow_pointer() {
-        pointer_display()
-    } else {
-        rune::DisplayTarget::Primary
+/// Points a capsule at the primary display, or with Labs › Meeting capsules
+/// follow the pointer the one under the pointer, so an offer for a call on an
+/// external display shows there. Read at each show, but the display is set
+/// only when the switch changed: every show re-places a window under the
+/// pointer by itself, and any `set_display` re-creates a layer-shell surface.
+fn aim(capsule: &OverlayHandle<Capsule>, following: &AtomicBool) {
+    let follow = crate::labs::meeting_capsules_follow_pointer();
+    if following.swap(follow, Ordering::Relaxed) != follow {
+        capsule.set_display(if follow {
+            pointer_display()
+        } else {
+            rune::DisplayTarget::Primary
+        });
     }
 }
 
@@ -438,6 +443,9 @@ pub(crate) struct MeetingCapsules {
     generation: Arc<AtomicU64>,
     /// The recording capsule's elapsed-time ticker runs while this is set.
     ticking: Arc<Mutex<Option<String>>>,
+    /// Whether each capsule was last aimed under the pointer (panel,
+    /// recording); see [`aim`].
+    following: [AtomicBool; 2],
 }
 
 impl MeetingCapsules {
@@ -522,6 +530,7 @@ impl MeetingCapsules {
             recording,
             generation: Arc::default(),
             ticking: Arc::default(),
+            following: Default::default(),
         }
     }
 
@@ -635,7 +644,7 @@ impl MeetingCapsules {
         } else {
             MeetingIndicatorCorner::TopRight
         };
-        self.panel.set_display(capsule_display());
+        aim(&self.panel, &self.following[0]);
         place_capsule(&self.panel, corner, 0.0, 0.0);
         self.panel
             .resize((panel_width(&kind), MEETING_PANEL_HEIGHT));
@@ -723,7 +732,7 @@ impl MeetingCapsules {
 
     fn show_recording(&self, id: String, title: String, automatic: bool) {
         let corner = crate::app_settings::meeting_indicator_corner();
-        self.recording.set_display(capsule_display());
+        aim(&self.recording, &self.following[1]);
         place_capsule(&self.recording, corner, 0.0, 0.0);
         let started = Instant::now();
         let ticker_id = id.clone();
