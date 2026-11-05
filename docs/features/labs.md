@@ -85,6 +85,13 @@ Feature             Pane  Toggle (settings.json, hex settings)   On: what it doe
 │                                        its heading, search shows every match whatever the folds, folds last until Hex quits (#1348)
 │                                        // checks: nothing_folds_with_the_lab_off, days_and_sections_fold_with_the_lab_on_and_search_ignores_folds
 │                                        // (rune_ui/meetings/folds.rs, Linux and Windows); no scene with folds yet; Labs page goldens need regenerating
+├── Meeting capsules follow the pointer no labs.meeting_capsules_follow_pointer (every OS with Meetings)
+│                                        offers, reminders, left the call, transcript ready, and the recording capsule show on
+│                                        the display under the pointer at each show instead of the primary one; GNOME and KDE
+│                                        on Wayland keep the primary (rune_hud::display); macOS snaps a drag against the screen
+│                                        it started on. Off: the primary display, exactly as before
+│                                        // check: meeting_capsules_follow_pointer_is_its_own_bit_and_off_by_default (labs.rs);
+│                                        // not observed on a real multi-display setup; Labs page goldens need regenerating
 ├── Restore clipboard on GNOME no labs.gnome_clipboard_restore (Linux) on a Wayland desktop without data-control (GNOME), a paste snapshots and restores
 │                                        the clipboard through XWayland, only while this user's Xwayland already runs; never starts it (#1111)
 ├── Floating meeting capsules on GNOME no labs.gnome_meeting_capsules (Linux) on a Wayland desktop without layer-shell (GNOME), the recording offer and

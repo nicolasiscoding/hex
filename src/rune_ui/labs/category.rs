@@ -86,6 +86,7 @@ impl Category {
             | Feature::MeetingPlatformIcons
             | Feature::FollowLiveTranscript
             | Feature::CollapsibleMeetingSections
+            | Feature::MeetingCapsulesFollowPointer
             | Feature::GnomeMeetingCapsules => Self::Meetings,
             Feature::LiveText
             | Feature::NotchIndicator
@@ -158,6 +159,7 @@ impl Place {
             | Feature::CollapsibleMeetingSections => Self::Pane(Pane::Meetings),
             Feature::StopWhenCallEnds
             | Feature::MovableMeetingCapsules
+            | Feature::MeetingCapsulesFollowPointer
             | Feature::GnomeMeetingCapsules => Self::Elsewhere(tr("Meeting capsules")),
             // A command, so never translated.
             Feature::SubtitleExport => Self::Elsewhere("hex meetings show"),

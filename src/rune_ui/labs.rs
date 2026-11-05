@@ -427,6 +427,12 @@ fn rows(ui: &Ui) -> Vec<Row> {
             tr("Collapsible meeting sections"),
             tr("Fold the summary, chapters, and day groups in Meetings"),
         ));
+        rows.push(row(
+            Feature::MeetingCapsulesFollowPointer,
+            None,
+            tr("Meeting capsules follow the pointer"),
+            tr("Show meeting offers, reminders, and the recording capsule on the display your pointer is on, not always the primary one"),
+        ));
     }
     rows.push(row(
         Feature::VocabularyBiasing,
@@ -767,6 +773,7 @@ fn row_key(lab: Lab) -> &'static str {
         Feature::Screenshots => "lab-screenshots",
         Feature::FollowLiveTranscript => "lab-follow-live-transcript",
         Feature::CollapsibleMeetingSections => "lab-collapsible-meeting-sections",
+        Feature::MeetingCapsulesFollowPointer => "lab-meeting-capsules-follow-pointer",
         Feature::AnnotateReplay => "lab-annotate-replay",
     }
 }
