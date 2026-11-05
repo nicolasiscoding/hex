@@ -547,6 +547,18 @@ Labs › Movable meeting capsules (macOS, off by default; #1093) // meetings.pan
   around it (#1305); a click on the body outside its buttons still stops
   there
 
+Labs › Meeting capsules follow the pointer (every OS, off by default) // meetings.capsule-display
+  Every meeting capsule: offer, reminder, left the call, Meeting transcript
+  ready, Recording automatically, and the recording capsule
+  -> On: each shows on the display under the pointer, read as it shows, so a
+     call on an external display is offered there; GNOME and KDE on Wayland
+     keep the primary display (rune_hud::display)
+  -> Off: the primary display, exactly as before (Rune's default)
+  macOS snaps a dragged capsule against the screen the drag started on, not
+  always the primary one. Check:
+  meeting_capsules_follow_pointer_is_its_own_bit_and_off_by_default (labs.rs);
+  not observed on a real multi-display setup
+
 Labs › Stop when the call ends (macOS, off by default; #835) // meetings.auto-stop
   Only a recording Hex started on its own (Always record); manual, offered,
   and calendar recordings are never stopped

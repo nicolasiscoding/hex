@@ -108,11 +108,12 @@ pub enum Feature {
     Screenshots,
     FollowLiveTranscript,
     CollapsibleMeetingSections,
+    MeetingCapsulesFollowPointer,
     AnnotateReplay,
 }
 
 impl Feature {
-    pub const ALL: [Self; 50] = [
+    pub const ALL: [Self; 51] = [
         Self::Meetings,
         Self::VoiceFilter,
         Self::Playground,
@@ -162,6 +163,7 @@ impl Feature {
         Self::Screenshots,
         Self::FollowLiveTranscript,
         Self::CollapsibleMeetingSections,
+        Self::MeetingCapsulesFollowPointer,
         Self::AnnotateReplay,
     ];
 
@@ -234,6 +236,7 @@ impl Feature {
             | Self::Screenshots
             | Self::FollowLiveTranscript
             | Self::CollapsibleMeetingSections
+            | Self::MeetingCapsulesFollowPointer
             | Self::AnnotateReplay
             | Self::NotchIndicator => Audience::Everyone,
         }
@@ -292,6 +295,7 @@ impl Feature {
             | Self::FollowLiveTranscript
             | Self::CollapsibleMeetingSections
             | Self::AnnotateReplay => 20261104,
+            Self::MeetingCapsulesFollowPointer => 20261105,
         }
     }
 
@@ -381,6 +385,7 @@ impl Feature {
             | Self::MeetingPlatformIcons
             | Self::FollowLiveTranscript
             | Self::CollapsibleMeetingSections
+            | Self::MeetingCapsulesFollowPointer
             | Self::FillerWords => true,
         }
     }
@@ -437,6 +442,7 @@ impl Feature {
             Self::Screenshots => "screenshots",
             Self::FollowLiveTranscript => "follow-live-transcript",
             Self::CollapsibleMeetingSections => "collapsible-meeting-sections",
+            Self::MeetingCapsulesFollowPointer => "meeting-capsules-follow-pointer",
             Self::AnnotateReplay => "annotate-replay",
         }
     }
@@ -493,6 +499,7 @@ impl Feature {
             Self::Screenshots => "labs.screenshots",
             Self::FollowLiveTranscript => "labs.follow_live_transcript",
             Self::CollapsibleMeetingSections => "labs.collapsible_meeting_sections",
+            Self::MeetingCapsulesFollowPointer => "labs.meeting_capsules_follow_pointer",
             Self::AnnotateReplay => "labs.annotate_replay",
         }
     }
@@ -629,6 +636,9 @@ impl Feature {
             Self::CollapsibleMeetingSections => {
                 "Fold the summary, chapters, and day groups in Meetings"
             }
+            Self::MeetingCapsulesFollowPointer => {
+                "Show meeting offers, reminders, and the recording capsule on the display your pointer is on, not always the primary one"
+            }
             Self::AnnotateReplay => {
                 "Save the last 15 seconds of your screen with hex capture replay or capture.replay_hotkey; macOS shows the screen-recording dot the whole time it's on (macOS 27+)"
             }
@@ -691,6 +701,7 @@ impl Feature {
             Self::Screenshots => settings.labs.screenshots,
             Self::FollowLiveTranscript => settings.labs.follow_live_transcript,
             Self::CollapsibleMeetingSections => settings.labs.collapsible_meeting_sections,
+            Self::MeetingCapsulesFollowPointer => settings.labs.meeting_capsules_follow_pointer,
             Self::AnnotateReplay => settings.labs.annotate_replay,
         }
     }
@@ -749,6 +760,7 @@ impl Feature {
             &mut labs.screenshots,
             &mut labs.follow_live_transcript,
             &mut labs.collapsible_meeting_sections,
+            &mut labs.meeting_capsules_follow_pointer,
             &mut labs.annotate_replay,
         ]
     }
@@ -809,6 +821,9 @@ impl Feature {
             Self::CollapsibleMeetingSections => {
                 settings.labs.collapsible_meeting_sections = on;
             }
+            Self::MeetingCapsulesFollowPointer => {
+                settings.labs.meeting_capsules_follow_pointer = on
+            }
             Self::AnnotateReplay => settings.labs.annotate_replay = on,
             // Off, no shortcut keeps a key only the feature allows.
             Self::StandaloneSpecialKeys => {
@@ -858,6 +873,9 @@ const SCREENSHOTS: u64 = 1 << 30;
 const ANNOTATE_REPLAY: u64 = 1 << 31;
 /// Unload-idle minutes (at most 1,440, 11 bits) sit above the switches.
 const MINUTES_SHIFT: u64 = 32;
+const MINUTES_MASK: u64 = 0x7ff;
+/// Above the minutes (bits 32-42): the low switch bits are all taken.
+const MEETING_CAPSULES_FOLLOW_POINTER: u64 = 1 << 44;
 
 /// This process's `labs` switches: unknown until settings load or one is
 /// first read.
@@ -1019,6 +1037,12 @@ pub fn movable_meeting_capsules() -> bool {
     on(MOVABLE_MEETING_CAPSULES) && Feature::MovableMeetingCapsules.on_this_os()
 }
 
+/// Meeting capsules (offers, reminders, recording) show on the display
+/// under the pointer instead of the primary one (read each time one shows).
+pub fn meeting_capsules_follow_pointer() -> bool {
+    on(MEETING_CAPSULES_FOLLOW_POINTER) && Feature::MeetingCapsulesFollowPointer.on_this_os()
+}
+
 /// Meeting notes written with OpenCode use the saved
 /// `meetings.opencode_model`, with no fallback to another model (every OS
 /// with meetings; read at each generation).
@@ -1082,7 +1106,7 @@ pub fn annotate_replay() -> bool {
 pub fn unload_idle() -> Option<std::time::Duration> {
     let state = state();
     (state & UNLOAD_IDLE != 0)
-        .then(|| std::time::Duration::from_secs((state >> MINUTES_SHIFT) * 60))
+        .then(|| std::time::Duration::from_secs(((state >> MINUTES_SHIFT) & MINUTES_MASK) * 60))
 }
 
 /// Records the switches the loaded or saved settings hold.
@@ -1213,6 +1237,11 @@ fn encode_where(settings: &LabsSettings, reaches: impl Fn(Feature) -> bool) -> u
             GNOME_MEETING_CAPSULES,
         ),
         (Feature::Screenshots, settings.screenshots, SCREENSHOTS),
+        (
+            Feature::MeetingCapsulesFollowPointer,
+            settings.meeting_capsules_follow_pointer,
+            MEETING_CAPSULES_FOLLOW_POINTER,
+        ),
     ]
     .into_iter()
     .filter(|(feature, on, _)| *on && reaches(*feature))
@@ -1671,6 +1700,21 @@ mod tests {
         assert_ne!(state & MOVABLE_MEETING_CAPSULES, 0);
         assert_eq!(state & HIDE_MENU_BAR_ICON, 0);
         assert_eq!(state >> MINUTES_SHIFT, 24 * 60);
+    }
+
+    #[test]
+    fn meeting_capsules_follow_pointer_is_its_own_bit_and_off_by_default() {
+        let mut labs = LabsSettings::default();
+        assert_eq!(
+            encode_where(&labs, |_| true) & MEETING_CAPSULES_FOLLOW_POINTER,
+            0
+        );
+        labs.meeting_capsules_follow_pointer = true;
+        labs.unload_idle_minutes = 24 * 60;
+        let state = encode_where(&labs, |_| true);
+        assert_ne!(state & MEETING_CAPSULES_FOLLOW_POINTER, 0);
+        // The bit sits clear of the minutes.
+        assert_eq!((state >> MINUTES_SHIFT) & MINUTES_MASK, 24 * 60);
     }
 
     #[test]

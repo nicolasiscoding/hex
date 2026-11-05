@@ -86,6 +86,8 @@ pub struct LabsSettings {
     pub follow_live_transcript: bool,
     /// Meetings' summary, chapters, and day groups fold and unfold (issue 1348).
     pub collapsible_meeting_sections: bool,
+    /// Meeting capsules show on the display under the pointer, not always the primary one.
+    pub meeting_capsules_follow_pointer: bool,
     /// With `labs.annotate_replay` on, keeps a rolling 15 s display buffer via `SCClipBufferingOutput` (macOS 27+).
     pub annotate_replay: bool,
 }
@@ -141,6 +143,7 @@ impl Default for LabsSettings {
             screenshots: false,
             follow_live_transcript: false,
             collapsible_meeting_sections: false,
+            meeting_capsules_follow_pointer: false,
         }
     }
 }

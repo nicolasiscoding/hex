@@ -168,6 +168,8 @@ struct Capsule {
     /// calls [`Capsule::finish_copy_new`]. Without it, Copy new copies what
     /// the ticker last read.
     copy_new: Option<CopyNew>,
+    /// The size of the screen a drag started on, which the capsule is on.
+    drag_screen: Option<(f32, f32)>,
 }
 
 type Choose = Arc<dyn Fn(MeetingProviderChoice) + Send + Sync>;
@@ -282,12 +284,13 @@ impl Capsule {
             return;
         };
         match drag.phase {
-            Phase::Down => {}
+            Phase::Down => self.drag_screen = pointer_screen_size(),
             Phase::Move => shift(self.corner, drag.dx, drag.dy),
             Phase::Up if drag.cancelled() => shift(self.corner, 0.0, 0.0),
             Phase::Up => {
                 let size = self.window_size();
-                let corner = primary_screen_size().map_or(self.corner, |screen| {
+                let screen = self.drag_screen.take().or_else(pointer_screen_size);
+                let corner = screen.map_or(self.corner, |screen| {
                     nearest_corner(self.corner, drag.dx, drag.dy, screen, size)
                 });
                 shift(corner, 0.0, 0.0);
@@ -353,19 +356,55 @@ fn nearest_corner(
     }
 }
 
-/// The primary screen in points, where Rune places the capsules.
+/// The screen under the pointer in points, else the primary one. Read as a
+/// drag starts, when the pointer is on the capsule: so it is the capsule's
+/// screen, primary or not (Labs › Meeting capsules follow the pointer).
 #[cfg(target_os = "macos")]
-fn primary_screen_size() -> Option<(f32, f32)> {
+fn pointer_screen_size() -> Option<(f32, f32)> {
     let mtm = objc2::MainThreadMarker::new()?;
-    let screen = objc2_app_kit::NSScreen::screens(mtm).iter().next()?;
+    let pointer = objc2_app_kit::NSEvent::mouseLocation();
+    let screens = objc2_app_kit::NSScreen::screens(mtm);
+    let screen = screens
+        .iter()
+        .find(|screen| {
+            let frame = screen.frame();
+            pointer.x >= frame.origin.x
+                && pointer.x < frame.origin.x + frame.size.width
+                && pointer.y >= frame.origin.y
+                && pointer.y < frame.origin.y + frame.size.height
+        })
+        .or_else(|| screens.iter().next())?;
     let size = screen.frame().size;
     Some((size.width as f32, size.height as f32))
 }
 
 /// Linux and Windows leave a dragged capsule in its corner.
 #[cfg(not(target_os = "macos"))]
-fn primary_screen_size() -> Option<(f32, f32)> {
+fn pointer_screen_size() -> Option<(f32, f32)> {
     None
+}
+
+/// The display a capsule shows on, read at each show: the primary one, or
+/// with Labs › Meeting capsules follow the pointer the one under the
+/// pointer, so an offer for a call on an external display shows there.
+fn capsule_display() -> rune::DisplayTarget {
+    if crate::labs::meeting_capsules_follow_pointer() {
+        pointer_display()
+    } else {
+        rune::DisplayTarget::Primary
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn pointer_display() -> rune::DisplayTarget {
+    rune::DisplayTarget::UnderPointer
+}
+
+/// The HUD's choice: the primary display where the pointer can't be read
+/// (GNOME and KDE on Wayland), else the one under it.
+#[cfg(not(target_os = "macos"))]
+fn pointer_display() -> rune::DisplayTarget {
+    crate::rune_hud::display()
 }
 
 fn place_capsule(
@@ -439,6 +478,7 @@ impl MeetingCapsules {
                     shift: None,
                     save_corner: save_corner.clone(),
                     copy_new: None,
+                    drag_screen: None,
                 },
             );
             // Only the drawn capsule (its `.hit()` body) takes clicks; the
@@ -595,6 +635,7 @@ impl MeetingCapsules {
         } else {
             MeetingIndicatorCorner::TopRight
         };
+        self.panel.set_display(capsule_display());
         place_capsule(&self.panel, corner, 0.0, 0.0);
         self.panel
             .resize((panel_width(&kind), MEETING_PANEL_HEIGHT));
@@ -682,6 +723,7 @@ impl MeetingCapsules {
 
     fn show_recording(&self, id: String, title: String, automatic: bool) {
         let corner = crate::app_settings::meeting_indicator_corner();
+        self.recording.set_display(capsule_display());
         place_capsule(&self.recording, corner, 0.0, 0.0);
         let started = Instant::now();
         let ticker_id = id.clone();
@@ -1337,6 +1379,7 @@ mod tests {
             shift: None,
             save_corner: Arc::new(|_| {}),
             copy_new: None,
+            drag_screen: None,
         };
         let env = Env {
             system_dark: dark,
